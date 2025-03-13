@@ -2,51 +2,54 @@
 
 import sqlite3
 
-conn = sqlite3.connect('test.db', check_same_thread=False)
+# Connect to database (disable thread check for Flask compatibility)
+conn = sqlite3.connect('bins.db', check_same_thread=False)
+cursor = conn.cursor()
 
-def insert_data(time, moisture, light):
-    conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-      VALUES (?, ?,?)", (time, moisture, light))
+# 🟢 Insert new bin data
+def insert_bin(location, temperature, capacity, status, anomaly):
+    cursor.execute("INSERT INTO BINS (LOCATION, TEMPERATURE, CAPACITY, STATUS, ANOMALY) VALUES (?, ?, ?, ?, ?)", 
+                   (location, temperature, capacity, status, anomaly))
     conn.commit()
-    print("Records created successfully, time = ", time, " moisture_level = ", moisture , " light_level = ", light)
-    print("############################")
-    
-def toggle_light(value):
-    conn.execute("UPDATE STATUS SET VALUE = ? WHERE ITEM = 'LIGHT'", (value,))
-    conn.commit()
-    print("Light status updated successfully, status = ", value)
+    print(f"Bin added: {location}, Temp: {temperature}, Capacity: {capacity}%, Status: {status}, Anomaly: {anomaly}")
 
-def toggle_pump(value):
-    conn.execute("UPDATE STATUS SET VALUE = ? WHERE ITEM = 'PUMP'", (value,))
-    conn.commit()
-    print("Pump status updated successfully, status = ", value)
+# 🔵 Get all bin data
+def get_bins():
+    cursor.execute("SELECT * FROM BINS")
+    rows = cursor.fetchall()
+    bins = []
+    for row in rows:
+        bins.append({
+            "id": row[0],
+            "location": row[1],
+            "temperature": row[2],
+            "capacity": row[3],
+            "status": row[4],
+            "anomaly": bool(row[5])
+        })
+    print("Bins data:", bins)
+    return bins
 
+# 🟡 Update bin status
+def update_bin_status(bin_id, status):
+    cursor.execute("UPDATE BINS SET STATUS = ? WHERE ID = ?", (status, bin_id))
+    conn.commit()
+    print(f"Bin {bin_id} status updated to {status}")
+
+# 🔴 Toggle anomaly flag
+def toggle_anomaly(bin_id, anomaly):
+    cursor.execute("UPDATE BINS SET ANOMALY = ? WHERE ID = ?", (anomaly, bin_id))
+    conn.commit()
+    print(f"Bin {bin_id} anomaly updated to {anomaly}")
+
+# 🟣 Get system-wide status (for future use)
 def get_status_data():
-    cursor = conn.execute("SELECT * from STATUS")
+    cursor.execute("SELECT * FROM STATUS")
     rows = cursor.fetchall()
-    data = {}
-    for row in rows:
+    status_dict = {row[0]: row[1] for row in rows}
+    print("System status:", status_dict)
+    return status_dict
 
-        data[row[0]] = row[1]
-
-    print(data, "status data")
-    return data
-
-def get_plant_data():
-    data = []
-    cursor = conn.execute("SELECT * from PLANT")
-    rows = cursor.fetchall()
-    for row in rows:
-        temp_dict = {
-            "time": row[1],
-            "moisture": row[2],
-            "light": row[3]
-        }
-        data.append(temp_dict)
-    print(data, "polant")
-    return data
-
-            # "sn": row[0],
-            # "time": row[1],
-            # "moisture": row[2],
-            # "light": row[3]
+# 🟠 Close DB connection (optional)
+def close_connection():
+    conn.close()

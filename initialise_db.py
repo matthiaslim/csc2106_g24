@@ -1,88 +1,48 @@
-#!/usr/bin/python
+# !/usr/bin/python
 
 import sqlite3
 
-conn = sqlite3.connect('test.db')
+# Connect to SQLite database (creates file if not exists)
+conn = sqlite3.connect('bins.db')
+cursor = conn.cursor()
 
-conn.execute('''CREATE TABLE PLANT
-         (SN INT PRIMARY KEY,
-         TIME           VARCHAR(30)    NOT NULL,
-         MOISTURE           BOOL     NOT NULL,
-      LIGHT           INTEGER(10)    NOT NULL
-             );''')
+# Drop existing tables (for re-initialization, optional)
+cursor.execute("DROP TABLE IF EXISTS BINS")
+cursor.execute("DROP TABLE IF EXISTS STATUS")
 
-conn.execute('''CREATE TABLE STATUS
-             (
-         ITEM          VARCHAR(20)    NOT NULL,
-         VALUE           BOOL     NOT NULL
-             );''')
+# Create BINS table
+cursor.execute('''CREATE TABLE BINS (
+    ID INTEGER PRIMARY KEY AUTOINCREMENT,
+    LOCATION TEXT NOT NULL,
+    TEMPERATURE FLOAT NOT NULL,
+    CAPACITY INTEGER NOT NULL,
+    STATUS TEXT NOT NULL CHECK(STATUS IN ('active', 'inactive')),
+    ANOMALY BOOL NOT NULL
+)''')
 
-conn.execute("INSERT INTO STATUS (ITEM,VALUE) \
-      VALUES ('LIGHT', 0)")
+# Create STATUS table (for system-wide settings, optional)
+cursor.execute('''CREATE TABLE STATUS (
+    ITEM TEXT PRIMARY KEY,
+    VALUE BOOL NOT NULL
+)''')
 
-conn.execute("INSERT INTO STATUS (ITEM,VALUE) \
-      VALUES ('PUMP', 0)")
+# Insert initial bin data
+bins_data = [
+    ("Central Park", 30.5, 80, "active", 0),
+    ("Downtown", 35.2, 95, "active", 1),
+    ("Suburbs", 28.0, 60, "inactive", 0)
+]
 
-conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-      VALUES ('00:00:00', 1, 95)")
+cursor.executemany("INSERT INTO BINS (LOCATION, TEMPERATURE, CAPACITY, STATUS, ANOMALY) VALUES (?, ?, ?, ?, ?)", bins_data)
 
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('13:00:00', 1, 90)")
+# Insert initial system status
+status_data = [
+    ("LIGHT", 0),
+    ("PUMP", 0)
+]
+cursor.executemany("INSERT INTO STATUS (ITEM, VALUE) VALUES (?, ?)", status_data)
 
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('14:00:00', 1, 84)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('15:00:00', 1, 71)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('16:00:00', 1, 68)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('17:00:00', 0, 67)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('18:00:00', 0, 52)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('19:00:00', 0, 50)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
-# conn.execute("INSERT INTO PLANT (TIME,MOISTURE,LIGHT) \
-#       VALUES ('20:00:00', 1, 48)")
-
+# Commit and close connection
 conn.commit()
-print("Records created successfully")
+print("Database initialized successfully")
 conn.close()
