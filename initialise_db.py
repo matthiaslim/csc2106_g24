@@ -26,7 +26,7 @@ cursor.execute('''CREATE TABLE STATUS (
     VALUE BOOL NOT NULL
 )''')
 
-# Insert initial bin data
+# Insert initial bin data (you can modify this for our project)
 bins_data = [
     ("Central Park", 30.5, 80, "active", 0),
     ("Downtown", 35.2, 95, "active", 1),
