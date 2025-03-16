@@ -22,10 +22,12 @@ def get_bins():
         bins.append({
             "id": row[0],
             "location": row[1],
-            "temperature": row[2],
-            "capacity": row[3],
-            "status": row[4],
-            "anomaly": bool(row[5])
+            "latitude": row[2],
+            "longitude": row[3],
+            "temperature": row[4],
+            "capacity": row[5],
+            "status": row[6],
+            "anomaly": bool(row[7])
         })
     print("Bins data:", bins)
     return bins

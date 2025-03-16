@@ -14,6 +14,8 @@ cursor.execute("DROP TABLE IF EXISTS STATUS")
 cursor.execute('''CREATE TABLE BINS (
     ID INTEGER PRIMARY KEY AUTOINCREMENT,
     LOCATION TEXT NOT NULL,
+    LATITUDE FLOAT NOT NULL,
+    LONGITUDE FLOAT NOT NULL,
     TEMPERATURE FLOAT NOT NULL,
     CAPACITY INTEGER NOT NULL,
     STATUS TEXT NOT NULL CHECK(STATUS IN ('active', 'inactive')),
@@ -28,12 +30,12 @@ cursor.execute('''CREATE TABLE STATUS (
 
 # Insert initial bin data (you can modify this for our project)
 bins_data = [
-    ("Central Park", 30.5, 80, "active", 0),
-    ("Downtown", 35.2, 95, "active", 1),
-    ("Suburbs", 28.0, 60, "inactive", 0)
+    ("Lornie Trail #1", 1.341655, 103.829417, 30.5, 80, "active", 0),
+    ("Lornie Trail #2", 1.342452, 103.828698, 35.2, 95, "active", 1),
+    ("MacRitchie Pier #1", 1.342803, 103.830621, 28.0, 60, "inactive", 0)
 ]
 
-cursor.executemany("INSERT INTO BINS (LOCATION, TEMPERATURE, CAPACITY, STATUS, ANOMALY) VALUES (?, ?, ?, ?, ?)", bins_data)
+cursor.executemany("INSERT INTO BINS (LOCATION, LATITUDE, LONGITUDE, TEMPERATURE, CAPACITY, STATUS, ANOMALY) VALUES (?, ?, ?, ?, ?, ?, ?)", bins_data)
 
 # Insert initial system status
 status_data = [
