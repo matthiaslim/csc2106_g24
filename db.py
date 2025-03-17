@@ -95,6 +95,25 @@ def get_latest_data():
     return data
 
 
+def get_all_data():
+    cursor.execute('SELECT * FROM TTN_DATA')
+    rows = cursor.fetchall()
+    data = []
+    for row in rows:
+        data.append({
+            "id": row[0],
+            "device_id": row[1],
+            "received_at": row[2],
+            "temperature": row[3],
+            "fill_level": row[4],
+            "humidity": row[5],
+            "smoke_conc": row[6],
+            "lat": row[7],
+            "lon": row[8]
+        })
+    return data
+
+
 def get_devices():
     cursor.execute('''SELECT device_id FROM TTN_DATA'
                     WHERE id IN (

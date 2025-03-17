@@ -39,6 +39,12 @@ def get_latest_bins():
     return jsonify(bins)
 
 
+@app.route('/get-all-data')
+def get_all_data():
+    bins = db.get_all_data()
+    return jsonify(bins)
+
+
 @app.route('/ttn-webhook', methods=['POST'])
 def ttn_webhook():
     data = request.json
