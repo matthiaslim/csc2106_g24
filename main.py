@@ -67,6 +67,32 @@ def main_dashboard():
         api_key=api_key
     )
 
+@app.route('/table')
+def table():
+
+    api_key = get_api_key()
+
+    data = get_data()
+    
+    bins = data["bins"]
+    total_bins = data["total_bins"]
+    active_bins = data["active_bins"]
+    full_bins = data["full_bins"]
+    full_bins_perctg = data["full_bins_perctg"]
+    anomaly_bins = data["anomaly_bins"]
+
+
+    return render_template(
+        'table.html',
+        bins=bins,
+        total_bins=total_bins,
+        active_bins=active_bins,
+        full_bins=full_bins,
+        anomaly_bins=anomaly_bins,
+        full_bins_perctg=full_bins_perctg,
+        api_key=api_key
+    )
+
 
 @app.route("/get_bins")
 def get_bins():
