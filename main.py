@@ -100,10 +100,15 @@ def get_all_data():
     return jsonify(bins)
 
 
+@app.route('/get-full-bins')
+def get_full_bins():
+    bins = db.get_full_bins()
+    return jsonify(bins)
+
+
 @app.route('/ttn-webhook', methods=['POST'])
 def ttn_webhook():
     data = request.json
-    print(data)
 
     device_id = data['end_device_ids']['device_id']
     timestamp_str = data['uplink_message']['received_at']
