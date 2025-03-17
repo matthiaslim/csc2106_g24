@@ -94,6 +94,14 @@ def table():
     )
 
 
+@app.route('/bin_table')
+def bin_table():
+    data = get_data()
+
+    bins = data["bins"]
+
+    return render_template('tables.html', bins=bins)
+
 @app.route("/get_bins")
 def get_bins():
 
