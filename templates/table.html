@@ -63,20 +63,21 @@
 
             <!-- Nav Item - Dashboard -->
             <li class="nav-item active">
-                <a class="nav-link" href="index.html">
+                <a class="nav-link" href="{{ url_for('main_dashboard') }}">
                     <i class="fas fa-fw fa-tachometer-alt"></i>
                     <span>Dashboard</span></a>
             </li>
 
-            <!-- Divider -->
-            <hr class="sidebar-divider">
 
             <!-- Nav Item - Dashboard -->
             <li class="nav-item active">
-                <a class="nav-link" href="index.html">
-                    <i class="fas fa-fw fa-tachometer-alt"></i>
+                <a class="nav-link" href="{{ url_for('bin_table') }}">
+                    <i class="fas fa-fw fa-table"></i>
                     <span>Bin Table</span></a>
             </li>
+
+            <!-- Divider -->
+            <hr class="sidebar-divider">
             
         </ul>
         <!-- End of Sidebar -->
@@ -109,7 +110,7 @@
 
                     <!-- Page Heading -->
                     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-                        <h1 class="h3 mb-0 text-gray-800">Dashboard</h1>
+                        <h1 class="h3 mb-0 text-gray-800">Bins Table Overview</h1>
                         <a href="#" class="d-none d-sm-inline-block btn btn-sm btn-primary shadow-sm"><i
                                 class="fas fa-download fa-sm text-white-50"></i> Generate Report</a>
                     </div>
@@ -118,16 +119,11 @@
                     <div class="row">
                         <div class="container-fluid">
 
-                            <!-- Page Heading -->
-                            <h1 class="h3 mb-2 text-gray-800">Tables</h1>
-                            <p class="mb-4">DataTables is a third party plugin that is used to generate the demo table below.
-                                For more information about DataTables, please visit the <a target="_blank"
-                                    href="https://datatables.net">official DataTables documentation</a>.</p>
-        
+
                             <!-- DataTales Example -->
                             <div class="card shadow mb-4">
                                 <div class="card-header py-3">
-                                    <h6 class="m-0 font-weight-bold text-primary">DataTables Example</h6>
+                                    <h6 class="m-0 font-weight-bold text-primary">Bin Table</h6>
                                 </div>
                                 <div class="card-body">
                                     <div class="table-responsive">
@@ -136,19 +132,19 @@
                                                 <tr>
                                                     <th>Device ID</th>
                                                     <th>Device Name</th>
-                                                    <th>Humidity</th>
+                                                    <th>Humidity (g/KG)</th>
                                                     <th>Smoke Presence</th>
-                                                    <th>Temperature</th>
+                                                    <th>Temperature (°C)</th>
                                                     <th>Last Updated</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {% for bin in bins %}
+                                                {% for bin in data %}
                                                 <tr>
                                                     <td>{{ bin.id }}</td>
-                                                    <td>{{ bin.device_id }}</td>
+                                                    <td>{{ bin.device_name }}</td>
                                                     <td>{{ bin.humidity }}</td>
-                                                    <td>{{ "Yes" if bin.smoke_conc > 500 else "No" }}</td>
+                                                    <td>{{ bin.smoke }}</td>
                                                     <td>{{ bin.temperature }}</td>
                                                     <td>{{ bin.received_at }}</td>
                                                 </tr>
@@ -179,7 +175,7 @@
             <footer class="sticky-footer bg-white">
                 <div class="container my-auto">
                     <div class="copyright text-center my-auto">
-                        <span>Copyright &copy; Your Website 2021</span>
+                        <span>Copyright &copy; CSC2106_G24_2025 </span>
                     </div>
                 </div>
             </footer>
@@ -196,25 +192,7 @@
         <i class="fas fa-angle-up"></i>
     </a>
 
-    <!-- Logout Modal-->
-    <div class="modal fade" id="logoutModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel"
-        aria-hidden="true">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="exampleModalLabel">Ready to Leave?</h5>
-                    <button class="close" type="button" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">×</span>
-                    </button>
-                </div>
-                <div class="modal-body">Select "Logout" below if you are ready to end your current session.</div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary" type="button" data-dismiss="modal">Cancel</button>
-                    <a class="btn btn-primary" href="login.html">Logout</a>
-                </div>
-            </div>
-        </div>
-    </div>
+
 
     
     <!-- Page level custom scripts
