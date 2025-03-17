@@ -9,6 +9,7 @@ cursor = conn.cursor()
 # Drop existing tables (for re-initialization, optional)
 cursor.execute("DROP TABLE IF EXISTS BINS")
 cursor.execute("DROP TABLE IF EXISTS STATUS")
+cursor.execute("DROP TABLE IF EXISTS TTN_DATA")
 
 # Create BINS table
 cursor.execute('''CREATE TABLE BINS (
@@ -28,6 +29,22 @@ cursor.execute('''CREATE TABLE STATUS (
     VALUE BOOL NOT NULL
 )''')
 
+# Create table to store TTN data
+# timestamp, device_id, fill level, humidity, smoke concentration, temperature
+cursor.execute('''
+    CREATE TABLE TTN_DATA (
+        ID INTEGER PRIMARY KEY AUTOINCREMENT,
+        DEVICE_NAME TEXT NOT NULL,
+        TIME TEXT NOT NULL,
+        TEMPERATURE FLOAT NOT NULL,
+        FILL_LEVEL INTEGER NOT NULL,
+        HUMIDITY FLOAT NOT NULL,
+        SMOKE_CONCENTRATION FLOAT NOT NULL,
+        LAT FLOAT NOT NULL,
+        LON LOAT NOT NULL
+    )
+''')
+
 # Insert initial bin data (you can modify this for our project)
 bins_data = [
     ("Lornie Trail #1", 1.341655, 103.829417, 30.5, 80, "active", 0),
@@ -37,14 +54,16 @@ bins_data = [
     ("MacRitchie Pier #3", 1.342750, 103.831189, 28.5, 70, "active", 0)
 ]
 
-cursor.executemany("INSERT INTO BINS (LOCATION, LATITUDE, LONGITUDE, TEMPERATURE, CAPACITY, STATUS, ANOMALY) VALUES (?, ?, ?, ?, ?, ?, ?)", bins_data)
+cursor.executemany(
+    "INSERT INTO BINS (LOCATION, LATITUDE, LONGITUDE, TEMPERATURE, CAPACITY, STATUS, ANOMALY) VALUES (?, ?, ?, ?, ?, ?, ?)", bins_data)
 
 # Insert initial system status
 status_data = [
     ("LIGHT", 0),
     ("PUMP", 0)
 ]
-cursor.executemany("INSERT INTO STATUS (ITEM, VALUE) VALUES (?, ?)", status_data)
+cursor.executemany(
+    "INSERT INTO STATUS (ITEM, VALUE) VALUES (?, ?)", status_data)
 
 # Commit and close connection
 conn.commit()
