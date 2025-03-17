@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+from datetime import datetime
 import sqlite3
 
 # Connect to database (disable thread check for Flask compatibility)
@@ -66,8 +67,11 @@ def get_status_data():
 
 
 def insert_ttn_data(device_id, received_at, temperature, fill_level, humidity, smoke_concentration, lat, lon):
+    dt = datetime.fromisoformat(received_at)
+    formatted_dt = dt.strftime("%Y-%m-%d %H:%M:%S")
+
     cursor.execute("INSERT INTO TTN_DATA (DEVICE_NAME, TIME, TEMPERATURE, FILL_LEVEL, HUMIDITY, SMOKE_CONCENTRATION, LAT, LON) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                   (device_id, received_at, temperature, fill_level, humidity, smoke_concentration, lat, lon))
+                   (device_id, formatted_dt, temperature, fill_level, humidity, smoke_concentration, lat, lon))
     conn.commit()
     print(f"TTN data added: {device_id}, {received_at}, Temp: {temperature}, Fill level: {fill_level}, Humidity: {humidity}, Smoke concentration: {smoke_concentration}")
 
@@ -76,11 +80,13 @@ def get_latest_data():
     cursor.execute('''SELECT * FROM TTN_DATA
                     WHERE id IN (
                     SELECT MAX(id) FROM TTN_DATA
-                    GROUP BY device_id)
+                    GROUP BY device_name)
                    ''')
     rows = cursor.fetchall()
     data = []
     for row in rows:
+        smoke = "Yes" if row[6] > 300 else "No"
+
         data.append({
             "id": row[0],
             "device_name": row[1],
@@ -88,7 +94,7 @@ def get_latest_data():
             "temperature": row[3],
             "fill_level": row[4],
             "humidity": row[5],
-            "smoke_conc": row[6],
+            "smoke": smoke,
             "lat": row[7],
             "lon": row[8]
         })
@@ -100,6 +106,8 @@ def get_all_data():
     rows = cursor.fetchall()
     data = []
     for row in rows:
+        smoke = "Yes" if row[6] > 300 else "No"
+
         data.append({
             "id": row[0],
             "device_name": row[1],
@@ -107,7 +115,7 @@ def get_all_data():
             "temperature": row[3],
             "fill_level": row[4],
             "humidity": row[5],
-            "smoke_conc": row[6],
+            "smoke": smoke,
             "lat": row[7],
             "lon": row[8]
         })
@@ -115,10 +123,10 @@ def get_all_data():
 
 
 def get_devices():
-    cursor.execute('''SELECT device_id FROM TTN_DATA'
+    cursor.execute('''SELECT device_name FROM TTN_DATA'
                     WHERE id IN (
                     SELECT MAX(id) FROM TTN_DATA
-                    GROUP BY device_id)
+                    GROUP BY device_name)
                     ''')
 
 # 🟠 Close DB connection (optional)
