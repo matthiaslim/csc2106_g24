@@ -29,12 +29,15 @@ def get_data():
     full_bins_perctg = int((full_bins/active_bins)*100)
     normal_bins = active_bins - full_bins - anomaly_bins
 
+    full_bin_history = db.get_full_bins()
+
     data = {
         "bins": bins,
         "total_bins": total_bins,
         "active_bins": active_bins,
         "full_bins": full_bins,
         "full_bins_perctg": full_bins_perctg,
+        "full_bin_history": full_bin_history,
         "anomaly_bins": anomaly_bins,
         "normal_bins": normal_bins
     }
@@ -56,6 +59,8 @@ def main_dashboard():
     full_bins_perctg = data["full_bins_perctg"]
     anomaly_bins = data["anomaly_bins"]
 
+  
+
     return render_template(
         'index.html',
         bins=bins,
@@ -72,7 +77,6 @@ def main_dashboard():
 @app.route('/bin_table')
 def bin_table():
     bins = db.get_latest_data()
-    print(bins)
     return render_template(
         'table.html',
         data=bins

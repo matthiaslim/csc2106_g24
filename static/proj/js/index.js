@@ -24,7 +24,7 @@ function fetchAndUpdateBins() {
     fetch('/get_bins')
         .then(response => response.json())
         .then(data => {
-            console.log("Fetched bins:", data);
+
             markers.forEach(marker => marker.setMap(null)); // Remove old markers
             markers = [];
 
@@ -73,7 +73,7 @@ function updateCharts(data) {
     let normal_bins = data.normal_bins
     let full_bins = data.full_bins
     let anomaly_bins = data.anomaly_bins
-    console.log(normal_bins, full_bins, anomaly_bins)
+
     // Pie Chart Example
     var ctx = document.getElementById("myPieChart");
     var myPieChart = new Chart(ctx, {
@@ -136,13 +136,18 @@ function updateCharts(data) {
      }
      return s.join(dec);
      }
- 
+     
+
+    var full_bin_history = data.full_bin_history;
+     var labels = full_bin_history.map(item => item.hour);
+     var dataValues = full_bin_history.map(item => item.full_bins);    
+
      // Area Chart Example
      var ctx = document.getElementById("myAreaChart");
      var myLineChart = new Chart(ctx, {
      type: 'line',
      data: {
-         labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+         labels: labels,
          datasets: [{
          label: "Earnings",
          lineTension: 0.3,
@@ -156,7 +161,7 @@ function updateCharts(data) {
          pointHoverBorderColor: "rgba(78, 115, 223, 1)",
          pointHitRadius: 10,
          pointBorderWidth: 2,
-         data: [0, 10000, 5000, 15000, 10000, 20000, 15000, 25000, 20000, 30000, 25000, 40000],
+         data: dataValues,
          }],
      },
      options: {

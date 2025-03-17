@@ -38,7 +38,7 @@ def get_bins():
             "status": row[6],
             "anomaly": bool(row[7])
         })
-    print("Bins data:", bins)
+    # print("Bins data:", bins)
     return bins
 
 # 🟡 Update bin status
