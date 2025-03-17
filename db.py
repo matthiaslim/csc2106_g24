@@ -66,7 +66,7 @@ def get_status_data():
 
 
 def insert_ttn_data(device_id, received_at, temperature, fill_level, humidity, smoke_concentration, lat, lon):
-    cursor.execute("INSERT INTO TTN_DATA (DEVICE_ID, TIME, TEMPERATURE, FILL_LEVEL, HUMIDITY, SMOKE_CONCENTRATION, LAT, LON) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    cursor.execute("INSERT INTO TTN_DATA (DEVICE_NAME, TIME, TEMPERATURE, FILL_LEVEL, HUMIDITY, SMOKE_CONCENTRATION, LAT, LON) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                    (device_id, received_at, temperature, fill_level, humidity, smoke_concentration, lat, lon))
     conn.commit()
     print(f"TTN data added: {device_id}, {received_at}, Temp: {temperature}, Fill level: {fill_level}, Humidity: {humidity}, Smoke concentration: {smoke_concentration}")
@@ -83,7 +83,7 @@ def get_latest_data():
     for row in rows:
         data.append({
             "id": row[0],
-            "device_id": row[1],
+            "device_name": row[1],
             "received_at": row[2],
             "temperature": row[3],
             "fill_level": row[4],
@@ -102,7 +102,7 @@ def get_all_data():
     for row in rows:
         data.append({
             "id": row[0],
-            "device_id": row[1],
+            "device_name": row[1],
             "received_at": row[2],
             "temperature": row[3],
             "fill_level": row[4],

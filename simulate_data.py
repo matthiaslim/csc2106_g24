@@ -20,7 +20,7 @@ try:
         latitude = 1.370653
         longitude = 103.8268
 
-        cursor.execute("INSERT INTO TTN_DATA (DEVICE_ID, TIME, TEMPERATURE, FILL_LEVEL, HUMIDITY, SMOKE_CONCENTRATION, LAT, LON) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        cursor.execute("INSERT INTO TTN_DATA (DEVICE_NAME, TIME, TEMPERATURE, FILL_LEVEL, HUMIDITY, SMOKE_CONCENTRATION, LAT, LON) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                        (device_id, received_at, temperature, fill_level,
                         humidity, smoke_concentration, latitude, longitude)
                        )
