@@ -70,7 +70,7 @@ try:
 
         print(f"Inserted new data at {received_at}")
 
-        time.sleep(30)
+        time.sleep(1)
 
 except KeyboardInterrupt:
     print("\nStopping data simulation.")

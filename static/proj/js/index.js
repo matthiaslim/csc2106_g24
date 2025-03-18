@@ -1,6 +1,3 @@
-function showMap(lat, lng) {
-    document.getElementById('mapFrame').src = `https://www.google.com/maps?q=${lat},${lng}&output=embed`;
-}
 
 let map;
 let markers = [];
@@ -30,25 +27,31 @@ function fetchAndUpdateBins() {
 
             data.bins.forEach(bin => {
                 let marker = new google.maps.Marker({
-                    position: { lat: bin.latitude, lng: bin.longitude },
+                    position: { lat: bin.lat, lng: bin.lon },
                     map: map,
                     title: `Bin ${bin.id} - ${bin.location}`,
                 });
+                console.log(bin);
 
                 let infoWindow = new google.maps.InfoWindow({
                     content: `
                         <div>
-                            <h6><strong>Bin ${bin.id}</strong></h6>
-                            <p><strong>Location:</strong> ${bin.location}</p>
-                            <p><strong>Capacity:</strong> ${bin.capacity}%</p>
+                            <h6><strong>Bin Name: ${bin.device_name}</strong></h6>
+                            <p><strong>Active:</strong> ${bin.active}</p>
+                            <p><strong>Fill Level:</strong> ${bin.fill_level}%</p>
                             <p><strong>Temperature:</strong> ${bin.temperature}°C</p>
+                            <p><strong>Humidity:</strong> ${bin.humidity}%</p>
+                            <p><strong>Smoke Concentration:</strong> ${bin.smoke_concentration} PPM</p>
+                            <p><strong>Last Updated:</strong> ${bin.received_at}</p>
                             <p><strong>Status:</strong> 
-                                <span class="badge bg-${bin.status === 'active' ? 'success' : 'danger'}">${bin.status.toUpperCase()}</span>
+                                <span class="badge bg-${bin.active === 'Yes' ? 'success' : 'warning'}">${bin.active.toUpperCase()}</span>
                             </p>
-                            ${bin.anomaly ? '<p class="text-danger"><strong>⚠️ Anomaly detected!</strong></p>' : ''}
+                            ${bin.anomaly !== "No" ? `<p class="text-danger"><strong>⚠️ Anomaly detected: ${bin.anomaly}</strong></p>` : ''}
                         </div>
                     `,
                 });
+                
+                
 
                 marker.addListener("click", () => {
                     infoWindow.open(map, marker);
@@ -70,20 +73,21 @@ function updateCharts(data) {
     Chart.defaults.global.defaultFontFamily = 'Nunito', '-apple-system,system-ui,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif';
     Chart.defaults.global.defaultFontColor = '#858796';
 
-    let normal_bins = data.normal_bins
+    console.log(data)
+    let inactive_bins = data.inactive_bins
     let full_bins = data.full_bins
-    let anomaly_bins = data.anomaly_bins
+    let active_bins = data.active_bins_graph
 
     // Pie Chart Example
     var ctx = document.getElementById("myPieChart");
     var myPieChart = new Chart(ctx, {
     type: 'doughnut',
     data: {
-        labels: ["Normal", "Full", "Anomaly"],
+        labels: ["Active", "Inactive", "Full"],
         datasets: [{
-        data: [normal_bins ,  full_bins ,  anomaly_bins ],
-        backgroundColor: ['#1cc88a', '#f6c23e', '#e74a3b'],
-        hoverBackgroundColor: ['#1da373', '#ad8e3e', '#ad473d'],
+        data: [active_bins ,  inactive_bins ,  full_bins ],
+        backgroundColor: ['#1cc88a', '#858181', '#ccb011'],
+        hoverBackgroundColor: ['#1da373', '#404040', '#8f7900'],
         hoverBorderColor: "rgba(234, 236, 244, 1)",
         }],
     },
@@ -139,6 +143,16 @@ function updateCharts(data) {
      
 
     var full_bin_history = data.full_bin_history;
+    full_bin_history.sort((a, b) => {
+        let hourA = parseInt(a.hour);
+        let hourB = parseInt(b.hour);
+    
+        // If hourA is 00-09, shift it to after 23 (next day)
+        if (hourA < 10) hourA += 24;
+        if (hourB < 10) hourB += 24;
+    
+        return hourA - hourB;
+    });
      var labels = full_bin_history.map(item => item.hour);
      var dataValues = full_bin_history.map(item => item.full_bins);    
 

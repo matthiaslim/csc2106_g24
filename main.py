@@ -21,25 +21,32 @@ def get_api_key():
 
 def get_data():
 
-    bins = db.get_bins()
-    total_bins = len(bins)
-    active_bins = sum(1 for bin in bins if bin["status"] == "active")
-    full_bins = sum(1 for bin in bins if bin["capacity"] >= 90)
-    anomaly_bins = sum(1 for bin in bins if bin["anomaly"])
-    full_bins_perctg = int((full_bins/active_bins)*100)
-    normal_bins = active_bins - full_bins - anomaly_bins
+    # bins = db.get_bins()
+
+    general_metrics = db.get_general_metrics()
 
     full_bin_history = db.get_full_bins()
 
+    latest_data = db.get_latest_data()
+
+    total_bins = general_metrics["total_devices"]
+    active_bins = general_metrics["active_devices"]
+    full_bins = general_metrics["num_full"]
+    active_bins_graph = active_bins - full_bins
+    full_bins_perctg = int((full_bins / active_bins) * 100) if active_bins > 0 else 0
+    anomaly_bins = general_metrics["num_anomaly"]
+    inactive_bins = total_bins - active_bins
+
     data = {
-        "bins": bins,
+        "bins": latest_data,
         "total_bins": total_bins,
         "active_bins": active_bins,
         "full_bins": full_bins,
         "full_bins_perctg": full_bins_perctg,
         "full_bin_history": full_bin_history,
         "anomaly_bins": anomaly_bins,
-        "normal_bins": normal_bins
+        "inactive_bins": inactive_bins,
+        "active_bins_graph": active_bins_graph
     }
 
     return data
@@ -74,9 +81,13 @@ def main_dashboard():
 @app.route('/bin_table')
 def bin_table():
     bins = db.get_latest_data()
+    api_key = get_api_key()
+
     return render_template(
         'table.html',
-        data=bins
+        data=bins,
+        api_key=api_key
+
     )
 
 
