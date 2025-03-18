@@ -166,13 +166,18 @@ def get_general_metrics():
     time_diff_minutes = [
         (current_dt - received_dt).total_seconds() / 60 for received_dt in received_dt]
 
-    active = ["Yes" if time_diff <
-              5 else "No" for time_diff in time_diff_minutes]
+    active_bins = []
+
+    for row in rows:
+        received_time = datetime.strptime(row[4], fmt)
+        time_diff = (current_dt - received_time).total_seconds() / 60
+        if time_diff < 5:
+            active_bins.append(row)
 
     total_devices = len(rows)
-    active_devices = sum([1 for status in active if status == "Yes"])
-    num_anomaly = sum([1 for row in rows if row[11] != "No"])
-    num_full = sum([1 for row in rows if row[6] > 80])
+    active_devices = len(active_bins)
+    num_anomaly = sum([1 for row in active_bins if row[11] != "No"])
+    num_full = sum([1 for row in active_bins if row[6] > 80])
 
     return {
         "total_devices": total_devices,
