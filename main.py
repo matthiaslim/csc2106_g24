@@ -59,8 +59,6 @@ def main_dashboard():
     full_bins_perctg = data["full_bins_perctg"]
     anomaly_bins = data["anomaly_bins"]
 
-  
-
     return render_template(
         'index.html',
         bins=bins,
@@ -73,7 +71,6 @@ def main_dashboard():
     )
 
 
-
 @app.route('/bin_table')
 def bin_table():
     bins = db.get_latest_data()
@@ -83,12 +80,17 @@ def bin_table():
     )
 
 
-
 @app.route("/get_bins")
 def get_bins():
 
     data = get_data()
 
+    return jsonify(data)
+
+
+@app.route('/general_metrics')
+def general_metrics():
+    data = db.get_general_metrics()
     return jsonify(data)
 
 

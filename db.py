@@ -2,9 +2,9 @@
 
 from collections import defaultdict
 from datetime import datetime, timedelta
-import json
 import sqlite3
 import time
+from geopy.distance import geodesic
 
 # Connect to database (disable thread check for Flask compatibility)
 conn = sqlite3.connect('bins.db', check_same_thread=False)
@@ -31,8 +31,8 @@ def get_bins():
         bins.append({
             "id": row[0],
             "location": row[1],
-            "latitude": row[2],
-            "longitude": row[3],
+            "lat": row[2],
+            "lon": row[3],
             "temperature": row[4],
             "capacity": row[5],
             "status": row[6],
@@ -75,36 +75,111 @@ def insert_ttn_data(device_id, received_at, temperature, fill_level, humidity, s
     dt = datetime.fromisoformat(received_at)
     local_time = dt + timedelta(hours=8)
     formatted_dt = local_time.strftime("%Y-%m-%d %H:%M:%S")
+    # Check if device exists first. If exists, update, else, insert
+    cursor.execute("SELECT * FROM DEVICES WHERE DEVICE_NAME = ?", (device_id,))
+    row = cursor.fetchone()
+
+    anomalies = []
+
+    # Look for anomalies: Smoke, Temperature, Location
+    if smoke_concentration > 50:
+        anomalies.append("Smoke")
+    if temperature > 35:
+        anomalies.append("Temperature")
+
+    if row:
+        current_location = (row[2], row[3])
+        print(current_location)
+        new_location = (lat, lon)
+
+        distance_moved = geodesic(current_location, new_location).meters
+
+        if distance_moved > 500:
+            anomalies.append("Location")
+
+        anomaly_str = ", ".join(anomalies) if anomalies else "No"
+
+        cursor.execute("UPDATE DEVICES SET TIME = ?, TEMPERATURE = ?, FILL_LEVEL = ?, HUMIDITY = ?, SMOKE_CONCENTRATION = ?, LAT = ?, LON = ?, ANOMALY = ? WHERE DEVICE_NAME = ?",
+                       (formatted_dt, temperature, fill_level, humidity,
+                        smoke_concentration, lat, lon, anomaly_str, device_id)
+                       )
+    else:
+        cursor.execute("INSERT INTO DEVICES (DEVICE_NAME, TIME, TEMPERATURE, FILL_LEVEL, HUMIDITY, SMOKE_CONCENTRATION, FIXED_LAT, FIXED_LON, LAT, LON, ANOMALY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                       (device_id, formatted_dt, temperature, fill_level,
+                        humidity, smoke_concentration, lat, lon, lat, lon, anomaly_str)
+                       )
 
     cursor.execute("INSERT INTO TTN_DATA (DEVICE_NAME, TIME, TEMPERATURE, FILL_LEVEL, HUMIDITY, SMOKE_CONCENTRATION, LAT, LON) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                   (device_id, formatted_dt, temperature, fill_level, humidity, smoke_concentration, lat, lon))
+                   (device_id, formatted_dt, temperature, fill_level,
+                    humidity, smoke_concentration, lat, lon)
+                   )
+
     conn.commit()
     print(f"TTN data added: {device_id}, {received_at}, Temp: {temperature}, Fill level: {fill_level}, Humidity: {humidity}, Smoke concentration: {smoke_concentration}")
 
 
 def get_latest_data():
-    cursor.execute('''SELECT * FROM TTN_DATA
-                    WHERE id IN (
-                    SELECT MAX(id) FROM TTN_DATA
-                    GROUP BY device_name)
-                   ''')
+    cursor.execute('''SELECT * FROM DEVICES''')
+
     rows = cursor.fetchall()
     data = []
     for row in rows:
-        smoke = "Yes" if row[6] > 300 else "No"
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        fmt = "%Y-%m-%d %H:%M:%S"
+        current_dt = datetime.strptime(current_time, fmt)
+        received_dt = datetime.strptime(row[4], fmt)
+
+        time_diff = current_dt - received_dt
+        time_diff_minutes = time_diff.total_seconds() / 60
+
+        active = "Yes" if time_diff_minutes < 5 else "No"
 
         data.append({
             "id": row[0],
             "device_name": row[1],
-            "received_at": row[2],
-            "temperature": row[3],
-            "fill_level": row[4],
-            "humidity": row[5],
-            "smoke": smoke,
-            "lat": row[7],
-            "lon": row[8]
+            "fixed_lat": row[2],
+            "fixed_lon": row[3],
+            "received_at": row[4],
+            "temperature": row[5],
+            "fill_level": row[6],
+            "humidity": row[7],
+            "smoke_concentration": row[8],
+            "lat": row[9],
+            "lon": row[10],
+            "active": active,
+            "anomaly": row[11]
         })
     return data
+
+
+def get_general_metrics():
+    cursor.execute('SELECT * FROM DEVICES')
+    rows = cursor.fetchall()
+
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    fmt = "%Y-%m-%d %H:%M:%S"
+    current_dt = datetime.strptime(current_time, fmt)
+    received_dt = [datetime.strptime(row[4], fmt) for row in rows]
+
+    time_diff_minutes = [
+        (current_dt - received_dt).total_seconds() / 60 for received_dt in received_dt]
+
+    active = ["Yes" if time_diff <
+              5 else "No" for time_diff in time_diff_minutes]
+
+    total_devices = len(rows)
+    active_devices = sum([1 for status in active if status == "Yes"])
+    num_anomaly = sum([1 for row in rows if row[11] != "No"])
+    num_full = sum([1 for row in rows if row[6] > 80])
+
+    return {
+        "total_devices": total_devices,
+        "active_devices": active_devices,
+        "num_anomaly": num_anomaly,
+        "num_full": num_full
+    }
 
 
 def get_all_data():
@@ -112,8 +187,6 @@ def get_all_data():
     rows = cursor.fetchall()
     data = []
     for row in rows:
-        smoke = "Yes" if row[6] > 300 else "No"
-
         data.append({
             "id": row[0],
             "device_name": row[1],
@@ -121,19 +194,11 @@ def get_all_data():
             "temperature": row[3],
             "fill_level": row[4],
             "humidity": row[5],
-            "smoke": smoke,
+            "smoke_concentration": row[6],
             "lat": row[7],
             "lon": row[8]
         })
     return data
-
-
-def get_devices():
-    cursor.execute('''SELECT device_name FROM TTN_DATA'
-                    WHERE id IN (
-                    SELECT MAX(id) FROM TTN_DATA
-                    GROUP BY device_name)
-                    ''')
 
 # Get hourly full bin data
 # Get last 6 hours of data based on current time of unique bins, condition should be fill_level > 80, get count of bins that are full, per hour
@@ -145,7 +210,7 @@ def get_full_bins():
             strftime('%H', TIME) AS hour_group,
             DEVICE_NAME  -- Select only the necessary fields for the count
         FROM TTN_DATA
-        WHERE TIME >= datetime('now', '-6 hours')
+        WHERE TIME >= datetime('now', '-6 hours', '+8 hours')
         AND FILL_LEVEL > 80
         ORDER BY hour_group DESC, TIME DESC;
     ''')
