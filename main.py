@@ -1,11 +1,34 @@
+import base64
+import os
 from flask import Flask, request, jsonify, render_template
 
-import time
-from datetime import datetime, timezone
+from dotenv import load_dotenv
+from datetime import datetime, timedelta, timezone
 import db
-import json
+
+load_dotenv()
 
 app = Flask(__name__)
+
+TTN_USERNAME = os.getenv("TTN_WEBHOOK_USERNAME", "myuser")
+TTN_PASSWORD = os.getenv("TTN_WEBHOOK_PASSWORD", "mypassword")
+api_key = os.getenv("MAP_API_KEY", "")
+
+
+def verify_basic_auth(auth_header):
+    """Verify Basic Auth Credentials"""
+    if not auth_header or not auth_header.startswith("Basic "):
+        return False
+
+    # Decode Base64 encoded credentials
+    encoded_credentials = auth_header.split(" ")[1]  # Extract Base64 part
+    decoded_credentials = base64.b64decode(
+        encoded_credentials).decode()  # Decode to string
+
+    # Split into username:password
+    username, password = decoded_credentials.split(":", 1)
+
+    return username == TTN_USERNAME and password == TTN_PASSWORD
 
 
 def get_api_key():
@@ -33,7 +56,8 @@ def get_data():
     active_bins = general_metrics["active_devices"]
     full_bins = general_metrics["num_full"]
     active_bins_graph = active_bins - full_bins
-    full_bins_perctg = int((full_bins / active_bins) * 100) if active_bins > 0 else 0
+    full_bins_perctg = int((full_bins / active_bins) *
+                           100) if active_bins > 0 else 0
     anomaly_bins = general_metrics["num_anomaly"]
     inactive_bins = total_bins - active_bins
 
@@ -55,7 +79,8 @@ def get_data():
 @app.route('/')
 def main_dashboard():
 
-    api_key = get_api_key()
+    # api_key = get_api_key()
+    # print(API_KEY)
 
     data = get_data()
 
@@ -99,55 +124,51 @@ def get_bins():
     return jsonify(data)
 
 
-@app.route('/general_metrics')
-def general_metrics():
-    data = db.get_general_metrics()
-    return jsonify(data)
-
-
-@app.route('/get-latest-data')
-def get_latest_bins():
-    bins = db.get_latest_data()
-    return jsonify(bins)
-
-
-@app.route('/get-all-data')
-def get_all_data():
-    bins = db.get_all_data()
-    return jsonify(bins)
-
-
-@app.route('/get-full-bins')
-def get_full_bins():
-    bins = db.get_full_bins()
-    return jsonify(bins)
-
-
 @app.route('/ttn-webhook', methods=['POST'])
 def ttn_webhook():
+    headers = request.headers.get("Authorization")
+
+    if not verify_basic_auth(headers):
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+
     data = request.json
 
     device_id = data['end_device_ids']['device_id']
     timestamp_str = data['uplink_message']['received_at']
-    timestamp_str = timestamp_str[:26]  # Keep up to microseconds
+    timestamp_str = timestamp_str[:26] + "Z"
+
+    device_timestamp = datetime.strptime(
+        timestamp_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+
+    current_time = (datetime.now() - timedelta(hours=8)
+                    ).replace(tzinfo=timezone.utc)
+
+    time_difference = (current_time - device_timestamp).total_seconds()
+    print(f"{time_difference} {current_time} {device_timestamp}")
+
+    if time_difference > 120:
+        return jsonify({"error": "Replay Attack Detected!"}), 403
 
     timestamp_str = timestamp_str.replace("Z", "")
 
     received_at = datetime.fromisoformat(
         timestamp_str).replace(tzinfo=timezone.utc).isoformat()
-    payload = data['uplink_message']['decoded_payload']
-    if payload:
-        temperature = payload['temperature']
-        fill_level = payload['fill_level']
-        humidity = payload['humidity']
-        smoke_concentration = payload['smoke_conc']
-        lat = payload["lat"]
-        lon = payload["lon"]
+    if 'decoded_payload' in data['uplink_message']:
+        payload = data['uplink_message']['decoded_payload']
+        if payload:
+            temperature = payload['temperature']
+            fill_level = payload['fill_level']
+            humidity = payload['humidity']
+            smoke_concentration = payload['smoke_conc']
+            lat = payload["lat"]
+            lon = payload["lon"]
 
-        db.insert_ttn_data(device_id, received_at, temperature, fill_level,
-                           humidity, smoke_concentration, lat, lon)
+            db.insert_ttn_data(device_id, received_at, temperature, fill_level,
+                               humidity, smoke_concentration, lat, lon)
 
-        return jsonify({"status": "ok", "data": data})
+            return jsonify({"status": "ok", "data": data})
+    else:
+        return jsonify({"status": "error", "message": "No decoded payload"})
 
     return jsonify({"status": "ok", "message": "Other uplink"})
 
