@@ -4,6 +4,8 @@ from flask import Flask, request, jsonify, render_template
 
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
+
+import requests
 import db
 
 load_dotenv()
@@ -12,6 +14,7 @@ app = Flask(__name__)
 
 TTN_USERNAME = os.getenv("TTN_WEBHOOK_USERNAME", "myuser")
 TTN_PASSWORD = os.getenv("TTN_WEBHOOK_PASSWORD", "mypassword")
+TTN_API_KEY = os.getenv("TTN_API_KEY", "")
 api_key = os.getenv("MAP_API_KEY", "")
 
 
@@ -167,6 +170,64 @@ def ttn_webhook():
                                humidity, smoke_concentration, lat, lon)
 
             return jsonify({"status": "ok", "data": data})
+    else:
+        return jsonify({"status": "error", "message": "No decoded payload"})
+
+    return jsonify({"status": "ok", "message": "Other uplink"})
+
+
+@app.route('/benchmark-uplink', methods=['POST'])
+def benchmark_uplink():
+    data = request.json
+
+    device_id = data['end_device_ids']['device_id']
+    print(device_id)
+    timestamp_str = data['uplink_message']['received_at']
+    timestamp_str = timestamp_str[:26] + "Z"
+
+    device_timestamp = datetime.strptime(
+        timestamp_str, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+
+    current_time = (datetime.now() - timedelta(hours=8)
+                    ).replace(tzinfo=timezone.utc)
+
+    time_difference = (current_time - device_timestamp).total_seconds()
+    print(f"{time_difference} {current_time} {device_timestamp}")
+
+    if time_difference > 120:
+        return jsonify({"error": "Replay Attack Detected!"}), 403
+
+    timestamp_str = timestamp_str.replace("Z", "")
+
+    received_at = datetime.fromisoformat(
+        timestamp_str).replace(tzinfo=timezone.utc).isoformat()
+
+    # Check if there's a decoded payload in the data
+    if 'uplink_message' in data and 'decoded_payload' in data['uplink_message']:
+        # Access the decoded payload data field (updated for TTN V3 format)
+        payload = data['uplink_message']['decoded_payload']
+
+        if payload:
+
+            # Example LoRa timestamp in seconds (from epoch)
+            lora_epoch = payload["startTime"]
+
+            # Convert LoRa epoch seconds to a datetime object
+            lora_time = datetime.utcfromtimestamp(lora_epoch)
+
+            # Get the current Flask server time in UTC (with microseconds)
+            flask_time = datetime.utcnow()
+
+            # Calculate the time difference
+            time_difference = flask_time - lora_time
+
+            # Convert the difference to milliseconds
+            milliseconds_difference = time_difference.total_seconds() * 1000
+
+            db.insert_metrics(milliseconds_difference)
+
+            # Print the time difference
+            print(f"Time difference: {milliseconds_difference:.2f} ms")
     else:
         return jsonify({"status": "error", "message": "No decoded payload"})
 

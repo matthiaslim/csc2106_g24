@@ -243,6 +243,13 @@ def get_full_bins():
             for hour, count in sorted(hourly_bin_counts.items(), reverse=True)]
     return data
 
+
+def insert_metrics(metric):
+    cursor.execute(
+        "INSERT INTO BENCHMARK_METRICS (METRIC) VALUES (?)", (metric,))
+    conn.commit()
+    print(f"Metric added: {metric}")
+
 # 🟠 Close DB connection (optional)
 
 
