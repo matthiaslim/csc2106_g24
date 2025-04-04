@@ -1,160 +1,103 @@
-/*******************************************************************************
- * Copyright (c) 2015 Thomas Telkamp and Matthijs Kooijman
- * Copyright (c) 2018 Terry Moore, MCCI
- *
- * Permission is hereby granted, free of charge, to anyone
- * obtaining a copy of this document and accompanying files,
- * to do whatever they want with them without any restriction,
- * including, but not limited to, copying, modification and redistribution.
- * NO WARRANTY OF ANY KIND IS PROVIDED.
- *
- * This example sends a valid LoRaWAN packet with payload "Hello,
- * world!", using frequency and encryption settings matching those of
- * the The Things Network.
- *
- * This uses OTAA (Over-the-air activation), where where a DevEUI and
- * application key is configured, which are used in an over-the-air
- * activation procedure where a DevAddr and session keys are
- * assigned/generated for use with all further communication.
- *
- * Note: LoRaWAN per sub-band duty-cycle limitation is enforced (1% in
- * g1, 0.1% in g2), but not the TTN fair usage policy (which is probably
- * violated by this sketch when left running for longer)!
-
- * To use this sketch, first register your application and device with
- * the things network, to set or generate an AppEUI, DevEUI and AppKey.
- * Multiple devices can use the same AppEUI, but each device has its own
- * DevEUI and AppKey.
- *
- * Do not forget to define the radio type correctly in
- * arduino-lmic/project_config/lmic_project_config.h or from your BOARDS.txt.
- *
- *******************************************************************************/
-
 #include <lmic.h>
 #include <hal/hal.h>
 #include <SPI.h>
 #include <DHT.h>
 
-//
-// For normal use, we require that you edit the sketch to replace FILLMEIN
-// with values assigned by the TTN console. However, for regression tests,
-// we want to be able to compile these scripts. The regression tests define
-// COMPILE_REGRESSION_TEST, and in that case we define FILLMEIN to a non-
-// working but innocuous value.
-//
-#ifdef COMPILE_REGRESSION_TEST
-# define FILLMEIN 0
-#else
-# warning "You must replace the values marked FILLMEIN with real values from the TTN control panel!"
-# define FILLMEIN (#dont edit this, edit the lines that use FILLMEIN)
-#endif
+// Enable this line for detailed status messages (comment out for production to save memory)
+// #define DEBUG_MODE 1
+
+// Status LED to show transmission states
+#define STATUS_LED LED_BUILTIN
 
 // ------- MQ2 Sensor Configuration -------
-#define         MQ_PIN                       (A0)    // MQ2 Analog Pin
-#define         RL_VALUE                     (5)     // Load resistance on board, in kilo ohms
-#define         RO_CLEAN_AIR_FACTOR          (9.83)  // RO_CLEAN_AIR_FACTOR=(Sensor resistance in clean air)/RO
+#define MQ_PIN                  (A0)   // MQ2 Analog Pin
+#define RL_VALUE                (5)    // Load resistance on board, in kilo ohms
+#define RO_CLEAN_AIR_FACTOR     (9.83) // RO_CLEAN_AIR_FACTOR=(Sensor resistance in clean air)/RO
                                                      
-// MQ2 Calibration Parameters
-#define         CALIBARAION_SAMPLE_TIMES     (50)    // Number of samples in calibration phase
-#define         CALIBRATION_SAMPLE_INTERVAL  (500)   // Time interval between samples (ms)
-#define         READ_SAMPLE_INTERVAL         (50)    // Time interval between samples in normal operation
-#define         READ_SAMPLE_TIMES            (5)     // Number of samples in normal operation
+// MQ2 Calibration Parameters - Reduced for memory optimization
+#define CALIBRATION_SAMPLE_TIMES     (25)   // Reduced from 50
+#define CALIBRATION_SAMPLE_INTERVAL  (500)  // Time interval between samples (ms)
+#define READ_SAMPLE_INTERVAL         (50)   // Time interval between samples in normal operation
+#define READ_SAMPLE_TIMES            (5)    // Number of samples in normal operation
 
-// MQ2 Gas Identifiers
-#define         GAS_LPG                      (0)
-#define         GAS_CO                       (1)
-#define         GAS_SMOKE                    (2)
-
-// MQ2 Gas Curves - from datasheet
-float           LPGCurve[3]  =  {2.3,0.21,-0.47};
-float           COCurve[3]   =  {2.3,0.72,-0.34};
-float           SmokeCurve[3]=  {2.3,0.53,-0.44};
-float           Ro           =  10;  // Initial Ro value
+// Only keep smoke curve since that's what we're using
+float SmokeCurve[3] = {2.3,0.53,-0.44};
+float Ro = 10;  // Initial Ro value
 
 // ------- Bin Configuration -------
-const float binHeight = 50.0;  // Height of bin in cm
-const float sensorOffset = 2.0;  // Distance from sensor to top of bin in cm
-const int numReadings = 5;       // Moving Average Filter
-float readings[numReadings] = {0}; 
-int readIndex = 0;
-float total = 0;
+const float binHeight = 50.0;     // Height of bin in cm
+const float sensorOffset = 2.0;   // Distance from sensor to top of bin in cm
 
 // ------- Pin Definitions -------
-#define DHTPIN 8       // DHT22 Data Pin
-#define DHTTYPE DHT22
+#define DHTPIN 9       // DHT22 Data Pin
+#define DHTTYPE DHT22  // DHT 22 sensor type
 DHT dht(DHTPIN, DHTTYPE);
+// SimpleDHT22 dht(DHTPIN);
 
 #define trigPin 3      // HC-SR04 Trigger Pin
 #define echoPin 4      // HC-SR04 Echo Pin
 
-// #define co2Pin A0      // MQ-2 Smoke Sensor Analog Output
+// LoRaWAN Configuration
+static const u1_t PROGMEM APPEUI[8] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+void os_getArtEui(u1_t* buf) { memcpy_P(buf, APPEUI, 8); }
 
-// This EUI must be in little-endian format, so least-significant-byte
-// first. When copying an EUI from ttnctl output, this means to reverse
-// the bytes. For TTN issued EUIs the last bytes should be 0xD5, 0xB3,
-// 0x70.
-static const u1_t PROGMEM APPEUI[8]={ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }; // Device 1
-void os_getArtEui (u1_t* buf) { memcpy_P(buf, APPEUI, 8);}
+static const u1_t PROGMEM DEVEUI[8] = { 0x65, 0xEB, 0x06, 0xD0, 0x7E, 0xD5, 0xB3, 0x70 };
+void os_getDevEui(u1_t* buf) { memcpy_P(buf, DEVEUI, 8); }
 
-// This should also be in little endian format, see above.
-static const u1_t PROGMEM DEVEUI[8]={ 0x65, 0xEB, 0x06, 0xD0, 0x7E, 0xD5, 0xB3, 0x70 }; // Device 2
-// static const u1_t PROGMEM DEVEUI[8]={ 0xD7, 0xE9, 0x06, 0xD0, 0x7E, 0xD5, 0xB3, 0x70 }; // Device 1
+static const u1_t PROGMEM APPKEY[16] = { 0x6A, 0x63, 0x7C, 0x0A, 0x87, 0x2F, 0x37, 0x8C, 0xBB, 0x51, 0x37, 0x91, 0x2F, 0x27, 0x26, 0x87 };
+void os_getDevKey(u1_t* buf) { memcpy_P(buf, APPKEY, 16); }
 
-void os_getDevEui (u1_t* buf) { memcpy_P(buf, DEVEUI, 8);}
-
-// This key should be in big endian format (or, since it is not really a
-// number but a block of memory, endianness does not really apply). In
-// practice, a key taken from ttnctl can be copied as-is.
-static const u1_t PROGMEM APPKEY[16] = { 0x6A, 0x63, 0x7C, 0x0A, 0x87, 0x2F, 0x37, 0x8C, 0xBB, 0x51, 0x37, 0x91, 0x2F, 0x27, 0x26, 0x87 }; // Device 2
-// static const u1_t PROGMEM APPKEY[16] = { 0xD1, 0x07, 0x9E, 0x57, 0x33, 0x8A, 0x04, 0x8A, 0xD8, 0x18, 0xFD, 0xE2, 0xF5, 0xD7, 0xF2, 0xD9 }; // Device 1
-void os_getDevKey (u1_t* buf) {  memcpy_P(buf, APPKEY, 16);}
-
-static uint8_t mydata[] = "Hello, world!";
 static osjob_t sendjob;
+const unsigned TX_INTERVAL = 60;  // Transmission interval in seconds
 
-// Schedule TX every this many seconds (might become longer due to duty
-// cycle limitations).
-const unsigned TX_INTERVAL = 60;
+// Device states for status tracking
+enum LoraState {
+  STATE_INIT,
+  STATE_JOINING,
+  STATE_JOINED,
+  STATE_TRANSMITTING,
+  STATE_TX_COMPLETE,
+  STATE_ERROR
+};
 
-// ------- MQ2 Sensor Functions -------
+volatile LoraState loraState = STATE_INIT;
+uint32_t txCount = 0;
+
+// Pin mapping for LoRa shield
+const lmic_pinmap lmic_pins = {
+    .nss = 10,
+    .rxtx = LMIC_UNUSED_PIN,
+    .rst = 7,
+    .dio = {2, 5, 6},
+};
+
+// ------- MQ2 Sensor Functions (Optimized) -------
 float MQResistanceCalculation(int raw_adc) {
   return ((float)RL_VALUE * (1023 - raw_adc) / raw_adc);
 }
 
 float MQCalibration(int mq_pin) {
-  int i;
   float val = 0;
-
-  for (i = 0; i < CALIBARAION_SAMPLE_TIMES; i++) {
+  for (int i = 0; i < CALIBRATION_SAMPLE_TIMES; i++) {
     val += MQResistanceCalculation(analogRead(mq_pin));
     delay(CALIBRATION_SAMPLE_INTERVAL);
   }
-  val = val / CALIBARAION_SAMPLE_TIMES;
-  val = val / RO_CLEAN_AIR_FACTOR;
-
+  val = val / CALIBRATION_SAMPLE_TIMES / RO_CLEAN_AIR_FACTOR;
   return val;
 }
 
 float MQRead(int mq_pin) {
-  int i;
   float rs = 0;
-
-  for (i = 0; i < READ_SAMPLE_TIMES; i++) {
+  for (int i = 0; i < READ_SAMPLE_TIMES; i++) {
     rs += MQResistanceCalculation(analogRead(mq_pin));
     delay(READ_SAMPLE_INTERVAL);
   }
-  rs = rs / READ_SAMPLE_TIMES;
-  return rs;
-}
-
-int MQGetGasPercentage(float rs_ro_ratio, float *pcurve) {
-  return (pow(10, (((log(rs_ro_ratio) - pcurve[1]) / pcurve[2]) + pcurve[0])));
+  return rs / READ_SAMPLE_TIMES;
 }
 
 int MQGetSmokeReading() {
   float rs_ro_ratio = MQRead(MQ_PIN) / Ro;
-  return MQGetGasPercentage(rs_ro_ratio, SmokeCurve);
+  return (int)(pow(10, (((log(rs_ro_ratio) - SmokeCurve[1]) / SmokeCurve[2]) + SmokeCurve[0])));
 }
 
 // ------- Function to Measure Distance (Bin Fill Level) -------
@@ -171,179 +114,206 @@ float measureDistance() {
     return distance; 
 }
 
-
-// Pin mapping
-const lmic_pinmap lmic_pins = {
-    .nss = 10,
-    .rxtx = LMIC_UNUSED_PIN,
-    .rst = 7,
-    .dio = {2, 5, 6},
-};
-
-void printHex2(unsigned v) {
-    v &= 0xff;
-    if (v < 16)
-        Serial.print('0');
-    Serial.print(v, HEX);
+// Show LoRa connection status with LED
+void showLoraStatus() {
+  switch(loraState) {
+    case STATE_JOINING:
+      // Fast blink during joining
+      digitalWrite(STATUS_LED, (millis() % 200 < 100));
+      break;
+    case STATE_JOINED:
+      // Solid on when connected
+      digitalWrite(STATUS_LED, HIGH);
+      break;
+    case STATE_TRANSMITTING:
+      // Quick pulse during transmission
+      digitalWrite(STATUS_LED, (millis() % 100 < 50));
+      break;
+    case STATE_TX_COMPLETE:
+      // Pulse once on successful transmission
+      digitalWrite(STATUS_LED, (millis() % 2000 < 200));
+      break;
+    case STATE_ERROR:
+      // SOS pattern for errors (3 short, 3 long, 3 short)
+      {
+        unsigned long ms = millis() % 2000;
+        if (ms < 600) { // 3 short
+          digitalWrite(STATUS_LED, (ms % 200 < 100));
+        } else if (ms < 1200) { // 3 long
+          digitalWrite(STATUS_LED, (ms % 200 < 150)); 
+        } else if (ms < 1800) { // 3 short again
+          digitalWrite(STATUS_LED, (ms % 200 < 100));
+        } else {
+          digitalWrite(STATUS_LED, LOW);
+        }
+      }
+      break;
+    default:
+      // Off when initializing
+      digitalWrite(STATUS_LED, LOW);
+  }
 }
 
-void onEvent (ev_t ev) {
+// LoRaWAN event handling
+void onEvent(ev_t ev) {
+    #ifdef DEBUG_MODE
+    Serial.print(F("[LoRa] Event at "));
     Serial.print(os_getTime());
-    Serial.print(": ");
+    Serial.print(F(": "));
+    #endif
+    
     switch(ev) {
-        case EV_SCAN_TIMEOUT:
-            Serial.println(F("EV_SCAN_TIMEOUT"));
-            break;
-        case EV_BEACON_FOUND:
-            Serial.println(F("EV_BEACON_FOUND"));
-            break;
-        case EV_BEACON_MISSED:
-            Serial.println(F("EV_BEACON_MISSED"));
-            break;
-        case EV_BEACON_TRACKED:
-            Serial.println(F("EV_BEACON_TRACKED"));
-            break;
         case EV_JOINING:
-            Serial.println(F("EV_JOINING"));
+            #ifdef DEBUG_MODE
+            Serial.println(F("JOINING"));
+            #endif
+            loraState = STATE_JOINING;
             break;
+            
         case EV_JOINED:
-            Serial.println(F("EV_JOINED"));
-            {
-              u4_t netid = 0;
-              devaddr_t devaddr = 0;
-              u1_t nwkKey[16];
-              u1_t artKey[16];
-              LMIC_getSessionKeys(&netid, &devaddr, nwkKey, artKey);
-              Serial.print("netid: ");
-              Serial.println(netid, DEC);
-              Serial.print("devaddr: ");
-              Serial.println(devaddr, HEX);
-              Serial.print("AppSKey: ");
-              for (size_t i=0; i<sizeof(artKey); ++i) {
-                if (i != 0)
-                  Serial.print("-");
-                printHex2(artKey[i]);
-              }
-              Serial.println("");
-              Serial.print("NwkSKey: ");
-              for (size_t i=0; i<sizeof(nwkKey); ++i) {
-                      if (i != 0)
-                              Serial.print("-");
-                      printHex2(nwkKey[i]);
-              }
-              Serial.println();
-            }
-            // Disable link check validation (automatically enabled
-            // during join, but because slow data rates change max TX
-	    // size, we don't use it in this example.
+            #ifdef DEBUG_MODE
+            Serial.println(F("JOINED"));
+            // Print the network session keys for debugging
+            Serial.print(F("DevAddr: "));
+            Serial.println(LMIC.devaddr, HEX);
+            #endif
+            loraState = STATE_JOINED;
             LMIC_setLinkCheckMode(0);
             break;
-        /*
-        || This event is defined but not used in the code. No
-        || point in wasting codespace on it.
-        ||
-        || case EV_RFU1:
-        ||     Serial.println(F("EV_RFU1"));
-        ||     break;
-        */
+            
         case EV_JOIN_FAILED:
-            Serial.println(F("EV_JOIN_FAILED"));
+            #ifdef DEBUG_MODE
+            Serial.println(F("JOIN FAILED"));
+            #endif
+            loraState = STATE_ERROR;
             break;
+            
         case EV_REJOIN_FAILED:
-            Serial.println(F("EV_REJOIN_FAILED"));
+            #ifdef DEBUG_MODE
+            Serial.println(F("REJOIN FAILED"));
+            #endif
+            loraState = STATE_ERROR;
             break;
+            
+        case EV_TXSTART:
+            #ifdef DEBUG_MODE
+            Serial.println(F("TX START"));
+            #endif
+            loraState = STATE_TRANSMITTING;
+            break;
+            
         case EV_TXCOMPLETE:
-            Serial.println(F("EV_TXCOMPLETE (includes waiting for RX windows)"));
+            #ifdef DEBUG_MODE
+            Serial.println(F("TX COMPLETE"));
             if (LMIC.txrxFlags & TXRX_ACK)
-              Serial.println(F("Received ack"));
+              Serial.println(F("✓ Received ack"));
             if (LMIC.dataLen) {
-              Serial.print(F("Received "));
+              Serial.print(F("↓ Received "));
               Serial.print(LMIC.dataLen);
-              Serial.println(F(" bytes of payload"));
+              Serial.println(F(" bytes downlink"));
             }
+            #endif
+            
+            txCount++;
+            loraState = STATE_TX_COMPLETE;
+            
             // Schedule next transmission
             os_setTimedCallback(&sendjob, os_getTime()+sec2osticks(TX_INTERVAL), do_send);
             break;
-        case EV_LOST_TSYNC:
-            Serial.println(F("EV_LOST_TSYNC"));
-            break;
-        case EV_RESET:
-            Serial.println(F("EV_RESET"));
-            break;
-        case EV_RXCOMPLETE:
-            // data received in ping slot
-            Serial.println(F("EV_RXCOMPLETE"));
-            break;
-        case EV_LINK_DEAD:
-            Serial.println(F("EV_LINK_DEAD"));
-            break;
-        case EV_LINK_ALIVE:
-            Serial.println(F("EV_LINK_ALIVE"));
-            break;
-        /*
-        || This event is defined but not used in the code. No
-        || point in wasting codespace on it.
-        ||
-        || case EV_SCAN_FOUND:
-        ||    Serial.println(F("EV_SCAN_FOUND"));
-        ||    break;
-        */
-        case EV_TXSTART:
-            Serial.println(F("EV_TXSTART"));
-            break;
-        case EV_TXCANCELED:
-            Serial.println(F("EV_TXCANCELED"));
-            break;
+            
         case EV_RXSTART:
-            /* do not print anything -- it wrecks timing */
+            /* Do not print anything -- it wrecks timing */
             break;
+            
         case EV_JOIN_TXCOMPLETE:
-            Serial.println(F("EV_JOIN_TXCOMPLETE: no JoinAccept"));
+            #ifdef DEBUG_MODE
+            Serial.println(F("JOIN TX COMPLETE (no JoinAccept)"));
+            #endif
             break;
-
+            
         default:
+            #ifdef DEBUG_MODE
             Serial.print(F("Unknown event: "));
             Serial.println((unsigned) ev);
+            #endif
             break;
     }
 }
 
-// Send stuff here
-void do_send(osjob_t* j){
-  // ---- Read Bin Fill Level ----
+// Function to prepare and send data
+void do_send(osjob_t* j) {
+    // Check if there is not a current TX/RX job running
+    if (LMIC.opmode & OP_TXRXPEND) {
+        #ifdef DEBUG_MODE
+        Serial.println(F("[LoRa] Skipping - previous TX pending"));
+        #endif
+        return;
+    }
+
+    #ifdef DEBUG_MODE
+    Serial.println(F("===== COLLECTING SENSOR DATA ====="));
+    #endif
+
+    // ---- Read Bin Fill Level ----
     float rawDistance = measureDistance();
-    float adjustedDistance = rawDistance - sensorOffset;
-    adjustedDistance = max(0, min(adjustedDistance, binHeight)); // Constrain
+    float adjustedDistance = max(0, min(rawDistance - sensorOffset, binHeight));
     uint8_t fillLevel = (uint8_t)(100.0 * (1.0 - (adjustedDistance / binHeight)));
 
+    // ---- Read Temperature & Humidity (DHT22) using SimpleDHT ----
+    // float temperature = -99.9;
+    // float humidity = -99.9;
+
     // ---- Read Temperature & Humidity (DHT22) ----
-    float temperature = dht.readTemperature();
     float humidity = dht.readHumidity();
+    float temperature = dht.readTemperature();
 
-    if (isnan(temperature)) temperature = -99.99;
-    if (isnan(humidity)) humidity = -99.99;
+    // Check if any reads failed
+    if (isnan(humidity) || isnan(temperature)) {
+      Serial.println("DHT22 read failed!");
+      temperature = -99.99;
+      humidity = -99.99;
+    }
 
-    int16_t tempScaled = (int16_t)(temperature * 10);  // Scaled value to integer
-    int16_t humidScaled = (int16_t)(humidity * 10);    // Scaled value to integer
+    // byte temp = 0;
+    // byte hum = 0;
+
+    // int err = dht.read(&temp, &hum, NULL);
+    // if (err == SimpleDHTErrSuccess) {
+    //     temperature = (float)temp;
+    //     humidity = (float)hum;
+        
+    //     #ifdef DEBUG_MODE
+    //     Serial.print(F("Temperature: "));
+    //     Serial.print(temperature);
+    //     Serial.print(F("°C, Humidity: "));
+    //     Serial.print(humidity);
+    //     Serial.println(F("%"));
+    //     #endif
+    // } else {
+    //     #ifdef DEBUG_MODE
+    //     Serial.print(F("DHT Read Error: "));
+    //     Serial.println(err);
+    //     #endif
+    // }
+
+    Serial.println(temperature);
+
+    int16_t tempScaled = (int16_t)(temperature * 10); 
+    int16_t humidScaled = (int16_t)(humidity * 10);   
 
     // ---- Read Smoke Level using MQ2 Sensor with Calibration ----
-    uint16_t smokeLevel = (uint16_t)MQGetSmokeReading(); // Get calibrated smoke reading
-
-    float latitude = 1.371038;
-    float longitude = 103.825450;
-
-    int32_t lat_scaled = (int32_t)(latitude * 1000000);
-    int32_t lon_scaled = (int32_t)(longitude * 1000000);
-
-    // Serial.print("Bin fill level: ");
-    // Serial.println(fillLevel);
-    // Serial.print("Smoke PPM: ");
-    // Serial.println(smokeLevel);
-    Serial.print("Temperature: ");
-    Serial.println(tempScaled);
-    // Serial.print("Humidity: ");
-    // Serial.println(humidScaled);
+    uint16_t smokeLevel = (uint16_t)MQGetSmokeReading();
     
+    #ifdef DEBUG_MODE
+    Serial.print(F("Fill Level: ")); 
+    Serial.print(fillLevel);
+    Serial.print(F("%, Smoke: "));
+    Serial.println(smokeLevel);
+    #endif
+
+    // Fixed location - saves memory versus float calculations
+    int32_t lat_scaled = 1371038;  // 1.371038 * 1000000
+    int32_t lon_scaled = 103825450; // 103.825450 * 1000000
 
     uint8_t payload[15];
     payload[0] = (tempScaled >> 8) & 0xFF;
@@ -354,63 +324,107 @@ void do_send(osjob_t* j){
     payload[5] = smokeLevel & 0xFF;
     payload[6] = fillLevel;
 
-    // Lat Payload (7 - 10)
+    // Lat Payload (7-10)
     payload[7] = (lat_scaled >> 24) & 0xFF;
     payload[8] = (lat_scaled >> 16) & 0xFF;
     payload[9] = (lat_scaled >> 8) & 0xFF;
     payload[10] = lat_scaled & 0xFF;
 
-    // Long Payload (11 - 14)
+    // Long Payload (11-14)
     payload[11] = (lon_scaled >> 24) & 0xFF;
     payload[12] = (lon_scaled >> 16) & 0xFF;
     payload[13] = (lon_scaled >> 8) & 0xFF;
     payload[14] = lon_scaled & 0xFF;
 
-    // Check if there is not a current TX/RX job running
-    if (LMIC.opmode & OP_TXRXPEND) {
-        Serial.println(F("OP_TXRXPEND, not sending"));
-    } else {
-        // Prepare upstream data transmission at the next possible time.
-        LMIC_setTxData2(1, payload, sizeof(payload), 0); // 0 for unconfirmed ACK, 1 for confirmed ACK
-        // Serial.println(temperature);
-        // Serial.println(humidity);
-        Serial.println(F("Packet queued"));
-    }
-    // Next TX is scheduled after TX_COMPLETE event.
+    // Transmit the data
+    LMIC_setTxData2(1, payload, sizeof(payload), 0);
+    
+    #ifdef DEBUG_MODE
+    Serial.println(F("[LoRa] Packet queued for transmission"));
+    Serial.print(F("[LoRa] Total packets sent: "));
+    Serial.println(txCount);
+    #endif
 }
 
 void setup() {
+    // Initialize status LED
+    pinMode(STATUS_LED, OUTPUT);
+    digitalWrite(STATUS_LED, HIGH);  // Turn on LED during setup
+    
+    // #ifdef DEBUG_MODE
     Serial.begin(9600);
-    Serial.println(F("Starting"));
+    while (!Serial && millis() < 3000); // Wait for Serial but timeout after 3 seconds
+    Serial.println(F("\n===== LoRaWAN Waste Monitor Starting ====="));
+    // #endif
 
-    #ifdef VCC_ENABLE
-    // For Pinoccio Scout boards
-    pinMode(VCC_ENABLE, OUTPUT);
-    digitalWrite(VCC_ENABLE, HIGH);
-    delay(1000);
-    #endif
-
+    // Initialize sensor pins
     pinMode(trigPin, OUTPUT);
     pinMode(echoPin, INPUT);
     dht.begin();
 
-    // MQ2 Sensor Calibration
-    Serial.println("Calibrating MQ2 sensor...");
-    Serial.println("This will take about 25 seconds");
+    // Calibrate MQ2 sensor
+    #ifdef DEBUG_MODE
+    Serial.println(F("Calibrating MQ2 sensor..."));
+    #endif
+    
     Ro = MQCalibration(MQ_PIN);
-    Serial.print("Calibration done. Ro = ");
-    Serial.print(Ro);
-    Serial.println(" kohm");
+    
+    #ifdef DEBUG_MODE
+    Serial.print(F("MQ2 Calibration done. Ro = "));
+    Serial.println(Ro);
+    #endif
 
-    // LMIC init
+    // LMIC initialization
+    #ifdef DEBUG_MODE
+    Serial.println(F("Initializing LoRaWAN..."));
+    #endif
+    
     os_init();
-    // Reset the MAC state. Session and pending data transfers will be discarded.
     LMIC_reset();
-
-    // Start job (sending automatically starts OTAA too)
+    
+    // Disable link check validation to save memory
+    LMIC_setLinkCheckMode(0);
+    
+    // TTN uses SF9 for its RX2 window
+    LMIC.dn2Dr = DR_SF9;
+    
+    // Set data rate and transmit power for uplink
+    LMIC_setDrTxpow(DR_SF7, 14);
+    
+    // Start join procedure and schedule first transmission
+    #ifdef DEBUG_MODE
+    Serial.println(F("Starting OTAA join procedure..."));
+    #endif
+    
     do_send(&sendjob);
+    
+    digitalWrite(STATUS_LED, LOW);  // Turn off LED after setup
 }
 
 void loop() {
+    // Run LMIC scheduler
     os_runloop_once();
+    
+    // Update LED status based on LoRa state
+    showLoraStatus();
+    
+    #ifdef DEBUG_MODE
+    // Periodically display status (every ~10 seconds)
+    static uint32_t lastStatusTime = 0;
+    if (millis() - lastStatusTime > 10000) {
+        Serial.print(F("[LoRa Status: "));
+        switch(loraState) {
+            case STATE_INIT: Serial.print(F("INITIALIZING")); break;
+            case STATE_JOINING: Serial.print(F("JOINING")); break;
+            case STATE_JOINED: Serial.print(F("JOINED")); break;
+            case STATE_TRANSMITTING: Serial.print(F("TRANSMITTING")); break;
+            case STATE_TX_COMPLETE: Serial.print(F("TX COMPLETE")); break;
+            case STATE_ERROR: Serial.print(F("ERROR")); break;
+        }
+        Serial.print(F(", TX count: "));
+        Serial.print(txCount);
+        Serial.println(F("]"));
+        lastStatusTime = millis();
+    }
+    #endif
 }
