@@ -50,6 +50,28 @@
 # define FILLMEIN (#dont edit this, edit the lines that use FILLMEIN)
 #endif
 
+// ------- MQ2 Sensor Configuration -------
+#define         MQ_PIN                       (A0)    // MQ2 Analog Pin
+#define         RL_VALUE                     (5)     // Load resistance on board, in kilo ohms
+#define         RO_CLEAN_AIR_FACTOR          (9.83)  // RO_CLEAN_AIR_FACTOR=(Sensor resistance in clean air)/RO
+                                                     
+// MQ2 Calibration Parameters
+#define         CALIBARAION_SAMPLE_TIMES     (50)    // Number of samples in calibration phase
+#define         CALIBRATION_SAMPLE_INTERVAL  (500)   // Time interval between samples (ms)
+#define         READ_SAMPLE_INTERVAL         (50)    // Time interval between samples in normal operation
+#define         READ_SAMPLE_TIMES            (5)     // Number of samples in normal operation
+
+// MQ2 Gas Identifiers
+#define         GAS_LPG                      (0)
+#define         GAS_CO                       (1)
+#define         GAS_SMOKE                    (2)
+
+// MQ2 Gas Curves - from datasheet
+float           LPGCurve[3]  =  {2.3,0.21,-0.47};
+float           COCurve[3]   =  {2.3,0.72,-0.34};
+float           SmokeCurve[3]=  {2.3,0.53,-0.44};
+float           Ro           =  10;  // Initial Ro value
+
 // ------- Bin Configuration -------
 const float binHeight = 50.0;  // Height of bin in cm
 const float sensorOffset = 2.0;  // Distance from sensor to top of bin in cm
@@ -59,14 +81,14 @@ int readIndex = 0;
 float total = 0;
 
 // ------- Pin Definitions -------
-#define DHTPIN 5       // DHT22 Data Pin
+#define DHTPIN 8       // DHT22 Data Pin
 #define DHTTYPE DHT22
 DHT dht(DHTPIN, DHTTYPE);
 
 #define trigPin 3      // HC-SR04 Trigger Pin
 #define echoPin 4      // HC-SR04 Echo Pin
 
-#define co2Pin A0      // MQ-2 Smoke Sensor Analog Output
+// #define co2Pin A0      // MQ-2 Smoke Sensor Analog Output
 
 // This EUI must be in little-endian format, so least-significant-byte
 // first. When copying an EUI from ttnctl output, this means to reverse
@@ -94,6 +116,46 @@ static osjob_t sendjob;
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).
 const unsigned TX_INTERVAL = 60;
+
+// ------- MQ2 Sensor Functions -------
+float MQResistanceCalculation(int raw_adc) {
+  return ((float)RL_VALUE * (1023 - raw_adc) / raw_adc);
+}
+
+float MQCalibration(int mq_pin) {
+  int i;
+  float val = 0;
+
+  for (i = 0; i < CALIBARAION_SAMPLE_TIMES; i++) {
+    val += MQResistanceCalculation(analogRead(mq_pin));
+    delay(CALIBRATION_SAMPLE_INTERVAL);
+  }
+  val = val / CALIBARAION_SAMPLE_TIMES;
+  val = val / RO_CLEAN_AIR_FACTOR;
+
+  return val;
+}
+
+float MQRead(int mq_pin) {
+  int i;
+  float rs = 0;
+
+  for (i = 0; i < READ_SAMPLE_TIMES; i++) {
+    rs += MQResistanceCalculation(analogRead(mq_pin));
+    delay(READ_SAMPLE_INTERVAL);
+  }
+  rs = rs / READ_SAMPLE_TIMES;
+  return rs;
+}
+
+int MQGetGasPercentage(float rs_ro_ratio, float *pcurve) {
+  return (pow(10, (((log(rs_ro_ratio) - pcurve[1]) / pcurve[2]) + pcurve[0])));
+}
+
+int MQGetSmokeReading() {
+  float rs_ro_ratio = MQRead(MQ_PIN) / Ro;
+  return MQGetGasPercentage(rs_ro_ratio, SmokeCurve);
+}
 
 // ------- Function to Measure Distance (Bin Fill Level) -------
 float measureDistance() {
@@ -264,16 +326,23 @@ void do_send(osjob_t* j){
     int16_t tempScaled = (int16_t)(temperature * 10);  // Scaled value to integer
     int16_t humidScaled = (int16_t)(humidity * 10);    // Scaled value to integer
 
-    // ---- Read Smoke/CO2 Level (MQ-2 Sensor) ----
-    int co2Raw = analogRead(co2Pin);
-    float voltage = co2Raw * (5.0 / 1023.0);
-    uint16_t smokeLevel = (uint16_t)(voltage * 200); // Example scaling
+    // ---- Read Smoke Level using MQ2 Sensor with Calibration ----
+    uint16_t smokeLevel = (uint16_t)MQGetSmokeReading(); // Get calibrated smoke reading
 
     float latitude = 1.371038;
     float longitude = 103.825450;
 
     int32_t lat_scaled = (int32_t)(latitude * 1000000);
     int32_t lon_scaled = (int32_t)(longitude * 1000000);
+
+    // Serial.print("Bin fill level: ");
+    // Serial.println(fillLevel);
+    // Serial.print("Smoke PPM: ");
+    // Serial.println(smokeLevel);
+    Serial.print("Temperature: ");
+    Serial.println(tempScaled);
+    // Serial.print("Humidity: ");
+    // Serial.println(humidScaled);
     
 
     uint8_t payload[15];
@@ -324,6 +393,14 @@ void setup() {
     pinMode(trigPin, OUTPUT);
     pinMode(echoPin, INPUT);
     dht.begin();
+
+    // MQ2 Sensor Calibration
+    Serial.println("Calibrating MQ2 sensor...");
+    Serial.println("This will take about 25 seconds");
+    Ro = MQCalibration(MQ_PIN);
+    Serial.print("Calibration done. Ro = ");
+    Serial.print(Ro);
+    Serial.println(" kohm");
 
     // LMIC init
     os_init();
