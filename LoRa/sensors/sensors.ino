@@ -56,7 +56,7 @@
 #define         RO_CLEAN_AIR_FACTOR          (9.83)  // RO_CLEAN_AIR_FACTOR=(Sensor resistance in clean air)/RO
                                                      
 // MQ2 Calibration Parameters
-#define         CALIBARAION_SAMPLE_TIMES     (50)    // Number of samples in calibration phase
+#define         CALIBARAION_SAMPLE_TIMES     (25)    // Number of samples in calibration phase
 #define         CALIBRATION_SAMPLE_INTERVAL  (500)   // Time interval between samples (ms)
 #define         READ_SAMPLE_INTERVAL         (50)    // Time interval between samples in normal operation
 #define         READ_SAMPLE_TIMES            (5)     // Number of samples in normal operation
@@ -73,15 +73,15 @@ float           SmokeCurve[3]=  {2.3,0.53,-0.44};
 float           Ro           =  10;  // Initial Ro value
 
 // ------- Bin Configuration -------
-const float binHeight = 50.0;  // Height of bin in cm
-const float sensorOffset = 2.0;  // Distance from sensor to top of bin in cm
+const float binHeight = 16.0;  // Height of bin in cm
+const float sensorOffset = 7.0;  // Distance from sensor to top of bin in cm
 const int numReadings = 5;       // Moving Average Filter
 float readings[numReadings] = {0}; 
 int readIndex = 0;
 float total = 0;
 
 // ------- Pin Definitions -------
-#define DHTPIN 8       // DHT22 Data Pin
+#define DHTPIN 9       // DHT22 Data Pin
 #define DHTTYPE DHT22
 DHT dht(DHTPIN, DHTTYPE);
 
@@ -98,16 +98,16 @@ static const u1_t PROGMEM APPEUI[8]={ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
 void os_getArtEui (u1_t* buf) { memcpy_P(buf, APPEUI, 8);}
 
 // This should also be in little endian format, see above.
-static const u1_t PROGMEM DEVEUI[8]={ 0x65, 0xEB, 0x06, 0xD0, 0x7E, 0xD5, 0xB3, 0x70 }; // Device 2
-// static const u1_t PROGMEM DEVEUI[8]={ 0xD7, 0xE9, 0x06, 0xD0, 0x7E, 0xD5, 0xB3, 0x70 }; // Device 1
+// static const u1_t PROGMEM DEVEUI[8]={ 0x65, 0xEB, 0x06, 0xD0, 0x7E, 0xD5, 0xB3, 0x70 }; // Device 2
+static const u1_t PROGMEM DEVEUI[8]={ 0xD7, 0xE9, 0x06, 0xD0, 0x7E, 0xD5, 0xB3, 0x70 }; // Device 1
 
 void os_getDevEui (u1_t* buf) { memcpy_P(buf, DEVEUI, 8);}
 
 // This key should be in big endian format (or, since it is not really a
 // number but a block of memory, endianness does not really apply). In
 // practice, a key taken from ttnctl can be copied as-is.
-static const u1_t PROGMEM APPKEY[16] = { 0x6A, 0x63, 0x7C, 0x0A, 0x87, 0x2F, 0x37, 0x8C, 0xBB, 0x51, 0x37, 0x91, 0x2F, 0x27, 0x26, 0x87 }; // Device 2
-// static const u1_t PROGMEM APPKEY[16] = { 0xD1, 0x07, 0x9E, 0x57, 0x33, 0x8A, 0x04, 0x8A, 0xD8, 0x18, 0xFD, 0xE2, 0xF5, 0xD7, 0xF2, 0xD9 }; // Device 1
+// static const u1_t PROGMEM APPKEY[16] = { 0x6A, 0x63, 0x7C, 0x0A, 0x87, 0x2F, 0x37, 0x8C, 0xBB, 0x51, 0x37, 0x91, 0x2F, 0x27, 0x26, 0x87 }; // Device 2
+static const u1_t PROGMEM APPKEY[16] = { 0xD1, 0x07, 0x9E, 0x57, 0x33, 0x8A, 0x04, 0x8A, 0xD8, 0x18, 0xFD, 0xE2, 0xF5, 0xD7, 0xF2, 0xD9 }; // Device 1
 void os_getDevKey (u1_t* buf) {  memcpy_P(buf, APPKEY, 16);}
 
 static uint8_t mydata[] = "Hello, world!";
@@ -115,7 +115,7 @@ static osjob_t sendjob;
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).
-const unsigned TX_INTERVAL = 60;
+const unsigned TX_INTERVAL = 30;
 
 // ------- MQ2 Sensor Functions -------
 float MQResistanceCalculation(int raw_adc) {
@@ -157,20 +157,39 @@ int MQGetSmokeReading() {
   return MQGetGasPercentage(rs_ro_ratio, SmokeCurve);
 }
 
-// ------- Function to Measure Distance (Bin Fill Level) -------
-float measureDistance() {
+uint8_t getBinFillLevel() {
+  uint32_t duration = 0;
+  uint8_t measurements = 0;
+  float distance = 0;
+  
+  // Take up to 3 measurements
+  for (uint8_t i = 0; i < 3 && measurements < 2; i++) {
     digitalWrite(trigPin, LOW);
     delayMicroseconds(2);
     digitalWrite(trigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
     
-    float duration = pulseIn(echoPin, HIGH);
-    float distance = (duration / 2.0) / 29.1;
-    
-    return distance; 
+    uint32_t reading = pulseIn(echoPin, HIGH, 30000);
+    if (reading > 0 && reading < 23200) { // Valid reading (< 4m)
+      duration += reading;
+      measurements++;
+    }
+    delay(10);
+  }
+  
+  if (measurements > 0) {
+    distance = (duration/measurements) / 58.0; // Simplified conversion
+  } else {
+    distance = binHeight + sensorOffset; // Default if no valid reading
+  }
+  
+  float adjustedDistance = distance - sensorOffset;
+  if (adjustedDistance < 0) adjustedDistance = 0;
+  if (adjustedDistance > binHeight) adjustedDistance = binHeight;
+  
+  return (uint8_t)(100.0 * (1.0 - (adjustedDistance / binHeight)));
 }
-
 
 // Pin mapping
 const lmic_pinmap lmic_pins = {
@@ -237,6 +256,7 @@ void onEvent (ev_t ev) {
             // during join, but because slow data rates change max TX
 	    // size, we don't use it in this example.
             LMIC_setLinkCheckMode(0);
+            LMIC_setDrTxpow(DR_SF7, 14);
             break;
         /*
         || This event is defined but not used in the code. No
@@ -311,10 +331,7 @@ void onEvent (ev_t ev) {
 // Send stuff here
 void do_send(osjob_t* j){
   // ---- Read Bin Fill Level ----
-    float rawDistance = measureDistance();
-    float adjustedDistance = rawDistance - sensorOffset;
-    adjustedDistance = max(0, min(adjustedDistance, binHeight)); // Constrain
-    uint8_t fillLevel = (uint8_t)(100.0 * (1.0 - (adjustedDistance / binHeight)));
+    uint8_t fillLevel = getBinFillLevel();
 
     // ---- Read Temperature & Humidity (DHT22) ----
     float temperature = dht.readTemperature();
@@ -329,11 +346,14 @@ void do_send(osjob_t* j){
     // ---- Read Smoke Level using MQ2 Sensor with Calibration ----
     uint16_t smokeLevel = (uint16_t)MQGetSmokeReading(); // Get calibrated smoke reading
 
-    float latitude = 1.371038;
-    float longitude = 103.825450;
+    // float latitude = 1.371038;
+    // float longitude = 103.825450;
 
-    int32_t lat_scaled = (int32_t)(latitude * 1000000);
-    int32_t lon_scaled = (int32_t)(longitude * 1000000);
+    // int32_t lat_scaled = (int32_t)(latitude * 1000000);
+    // int32_t lon_scaled = (int32_t)(longitude * 1000000);
+
+    int32_t lat_scaled = 1371841;
+    int32_t lon_scaled = 103824517;
 
     // Serial.print("Bin fill level: ");
     // Serial.println(fillLevel);
