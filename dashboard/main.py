@@ -91,7 +91,6 @@ def main_dashboard():
     total_bins = data["total_bins"]
     active_bins = data["active_bins"]
     full_bins = data["full_bins"]
-    print(f"Full bins: {full_bins}")
     full_bins_perctg = data["full_bins_perctg"]
     anomaly_bins = data["anomaly_bins"]
 
