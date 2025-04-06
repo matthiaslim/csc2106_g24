@@ -83,8 +83,8 @@ The Smart Waste Bin Management system is an IoT-based solution for optimizing wa
       ```bash
       cd dashboard
       python -m venv venv
+      .\venv\scripts\activate
       pip install -r requirements.txt
-      ./venv/scripts/activate
       ```
    
    3. Setup the database and run the webserver
