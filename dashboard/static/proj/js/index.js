@@ -22,6 +22,18 @@ function fetchAndUpdateBins() {
         .then(response => response.json())
         .then(data => {
 
+            document.querySelector('#total-bins').textContent = data.total_bins;
+            document.querySelector('#active-bins').textContent = data.active_bins;
+            
+            
+            document.querySelector('#full-bins').textContent = data.full_bins;
+            const progressBar = document.querySelector('#full-bins-progress');
+            progressBar.style.width = `${data.full_bins_perctg}%`;
+
+
+            document.querySelector('#anomaly-bins').textContent = data.anomaly_bins;
+            
+
             markers.forEach(marker => marker.setMap(null)); // Remove old markers
             markers = [];
 

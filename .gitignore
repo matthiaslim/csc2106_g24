@@ -1,6 +1,7 @@
 /venv
+/dashboard/venv
 /__pycache__
 *.db
 api_key.txt
-
+/dashboard/api_key.txt
 .env
