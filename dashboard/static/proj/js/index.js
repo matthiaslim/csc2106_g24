@@ -155,17 +155,30 @@ function updateCharts(data) {
 
 
     var full_bin_history = data.full_bin_history;
+    // Sort hours chronologically
     full_bin_history.sort((a, b) => {
         let hourA = parseInt(a.hour);
         let hourB = parseInt(b.hour);
-
-        // If hourA is 00-09, shift it to after 23 (next day)
-        if (hourA < 10) hourA += 24;
-        if (hourB < 10) hourB += 24;
-
+        
+        // Check if we have a possible day transition
+        if (Math.abs(hourA - hourB) > 12) {
+            // If hourA is in early hours (0-11) and hourB is in late hours (12-23)
+            if (hourA < 12 && hourB > 12) {
+                // hourA is likely the next day
+                return 1;
+            }
+            // If hourB is in early hours (0-11) and hourA is in late hours (12-23)
+            else if (hourB < 12 && hourA > 12) {
+                // hourB is likely the next day
+                return -1;
+            }
+        }
+        
+        // Normal comparison
         return hourA - hourB;
     });
-    var labels = full_bin_history.map(item => item.hour);
+
+    var labels = full_bin_history.map(item => item.hour + ":00");
     var dataValues = full_bin_history.map(item => item.full_bins);
 
     // Area Chart Example
@@ -203,7 +216,7 @@ function updateCharts(data) {
             scales: {
                 xAxes: [{
                     time: {
-                        unit: 'date'
+                        unit: 'hour'
                     },
                     gridLines: {
                         display: false,

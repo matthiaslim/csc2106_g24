@@ -252,6 +252,5 @@ def insert_metrics(metric):
 
 # 🟠 Close DB connection (optional)
 
-
 def close_connection():
     conn.close()

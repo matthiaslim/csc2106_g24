@@ -68,11 +68,32 @@ The Smart Waste Bin Management system is an IoT-based solution for optimizing wa
    ```
 
 2. **Dashboard Setup**
-   ```bash
-   cd dashboard
-   pip install -r requirements.txt
-   python server.py
-   ```
+   
+   1. Create a .env file in the dashboard folder with the following format and add in the values.
+
+      ```bash
+      TTN_WEBHOOK_USERNAME=<Replace witn TTN Webhook Username>
+      TTN_WEBHOOK_PASSWORD=<Replace witn TTN Webhook Password>
+      TTN_API_KEY=<Replace with TTN API Key>
+      MAP_API_KEY=<Replace with Google Maps API Key>
+      ```
+
+   2. Setup the virtual environment needed for the webserver
+
+      ```bash
+      cd dashboard
+      python -m venv venv
+      pip install -r requirements.txt
+      ./venv/scripts/activate
+      ```
+   
+   3. Setup the database and run the webserver
+
+      ```bash
+      python initialise_db.py
+      python simulate_data.py (optional)
+      python main.py
+      ```
 
 ## 📁 Project Structure
 

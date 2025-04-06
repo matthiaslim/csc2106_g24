@@ -21,7 +21,7 @@ try:
         smoke_concentration = round(random.uniform(0, 100), 2)
         dt = datetime.fromisoformat(received_at.replace(
             "Z", "+00:00"))  # Ensure it parses correctly
-        adjusted_dt = dt + timedelta(hours=8)  # Adjust by 5 hours
+        adjusted_dt = dt + timedelta(hours=8)  # Adjust by 8 hours
         formatted_time = adjusted_dt.strftime("%Y-%m-%d %H:%M:%S")
 
         anomalies = []

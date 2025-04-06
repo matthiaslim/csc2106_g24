@@ -7,22 +7,10 @@ conn = sqlite3.connect('bins.db')
 cursor = conn.cursor()
 
 # Drop existing tables (for re-initialization, optional)
-cursor.execute("DROP TABLE IF EXISTS BINS")
 cursor.execute("DROP TABLE IF EXISTS STATUS")
 cursor.execute("DROP TABLE IF EXISTS TTN_DATA")
 cursor.execute("DROP TABLE IF EXISTS DEVICES")
 
-# Create BINS table
-cursor.execute('''CREATE TABLE BINS (
-    ID INTEGER PRIMARY KEY AUTOINCREMENT,
-    LOCATION TEXT NOT NULL,
-    LATITUDE FLOAT NOT NULL,
-    LONGITUDE FLOAT NOT NULL,
-    TEMPERATURE FLOAT NOT NULL,
-    CAPACITY INTEGER NOT NULL,
-    STATUS TEXT NOT NULL CHECK(STATUS IN ('active', 'inactive')),
-    ANOMALY BOOL NOT NULL
-)''')
 
 # Create STATUS table (for system-wide settings, optional)
 cursor.execute('''CREATE TABLE STATUS (
@@ -63,25 +51,7 @@ cursor.execute('''
     )
 ''')
 
-# Insert initial bin data (you can modify this for our project)
-bins_data = [
-    ("Lornie Trail #1", 1.341655, 103.829417, 30.5, 80, "active", 0),
-    ("Lornie Trail #2", 1.342452, 103.828698, 35.2, 95, "active", 1),
-    ("MacRitchie Pier #1", 1.342815, 103.829651, 28.0, 60, "inactive", 0),
-    ("MacRitchie Pier #2", 1.342803, 103.830621, 29.0, 91, "active", 0),
-    ("MacRitchie Pier #3", 1.342750, 103.831189, 28.5, 70, "active", 0)
-]
 
-cursor.executemany(
-    "INSERT INTO BINS (LOCATION, LATITUDE, LONGITUDE, TEMPERATURE, CAPACITY, STATUS, ANOMALY) VALUES (?, ?, ?, ?, ?, ?, ?)", bins_data)
-
-# Insert initial system status
-status_data = [
-    ("LIGHT", 0),
-    ("PUMP", 0)
-]
-cursor.executemany(
-    "INSERT INTO STATUS (ITEM, VALUE) VALUES (?, ?)", status_data)
 
 # Commit and close connection
 conn.commit()

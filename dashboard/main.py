@@ -33,24 +33,11 @@ def verify_basic_auth(auth_header):
     return username == TTN_USERNAME and password == TTN_PASSWORD
 
 
-def get_api_key():
-    try:
-        with open("api_key.txt", "r") as file:
-            return file.read().strip()
-    except FileNotFoundError:
-        return ""
-    except Exception as e:
-        print(f"Error reading API key: {e}")
-        return ""
-
-
 def get_data():
 
 
     general_metrics = db.get_general_metrics()
-
     full_bin_history = db.get_full_bins()
-
     latest_data = db.get_latest_data()
 
     total_bins = general_metrics["total_devices"]
@@ -80,7 +67,6 @@ def get_data():
 @app.route('/')
 def main_dashboard():
 
-    api_key = get_api_key()
 
     data = get_data()
 
@@ -106,7 +92,6 @@ def main_dashboard():
 @app.route('/bin_table')
 def bin_table():
     bins = db.get_latest_data()
-    api_key = get_api_key()
 
     return render_template(
         'table.html',
