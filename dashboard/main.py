@@ -5,7 +5,6 @@ from flask import Flask, request, jsonify, render_template
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 
-import requests
 import db
 
 load_dotenv()
@@ -47,7 +46,6 @@ def get_api_key():
 
 def get_data():
 
-    # bins = db.get_bins()
 
     general_metrics = db.get_general_metrics()
 
@@ -82,8 +80,7 @@ def get_data():
 @app.route('/')
 def main_dashboard():
 
-    # api_key = get_api_key()
-    # print(API_KEY)
+    api_key = get_api_key()
 
     data = get_data()
 
@@ -120,7 +117,7 @@ def bin_table():
 
 
 @app.route("/get_bins")
-def get_bins():
+def get_bins(): # for the polling refresh of dashboard
 
     data = get_data()
 
